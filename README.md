@@ -44,7 +44,7 @@ You may also go through other tutorials for advanced usages.
 
 ## API Documentation
 
-API documentation is available [here](pcnaDeep.readthedocs.io/en/latest).
+API documentation is available [here](https://pcnadeep.readthedocs.io/).
 
 ## Reference
 

@@ -1,0 +1,39 @@
+BATCH: false           # Batch mode switch.
+PIX_SATURATE: 1        # Percent pixel saturation to pre-process the image.
+GAMMA: 1               # Gamma factor to pre-process the image.
+EDGE_FLT: 10           # Ignore objects at the edge (pixel unit).
+SIZE_FLT: 800          # Filter out detection with size below this (pixel count).
+TRACKER:
+  DISPLACE: 80         # Maximum movement of particles between consecutive frames in (x, y, bright field intensity) space.
+  GAP_FILL: 10         # Maximum gap to fill.
+POST_PROCESS:
+  MAX_BG: 5            # Maximum background classification accumulative scores to reject a period.
+  MIN_S: 5             # Minimum S classification accumulative scores to accept S phase.
+  MIN_M: 5             # Minimum M classification accumulative scores to accept M phase.
+  REFINER:
+    SMOOTH: 5          # Sliding window to smooth classification scores.
+    SAMPLE_FREQ: 0.2   # Metadata, sampling frequency in frame per minute.
+    SEARCH_RANGE: 10   # Range of searching M/E classification for defining candidate mother/daughter tracks.
+
+    MASK_CONSTRAINT:
+      ENABLED: false
+      DILATE_FACTOR: 0.5
+
+    MODE: TRH          # Mitosis association mode, either TRH (threshold-based) or SVM (require training data).
+    # TRH mode only
+    MAX_DIST_TRH: 120  # Maximum distance allowed for valid mother/daughter pair.
+    MAX_FRAME_TRH: 10  # Maximum frame gap between mother disappearance and daughter appearance.
+    DIST_WEIGHT: 0.5   # Weight of distance penalty, the weight for frame with be `1-DIST_WEIGHT`. 
+    # SVM mode only
+    ASO_TRH: 0.5       # Threshold filter on SVM confidence score.
+    C: 13              # C parameter for linear kernel SVM.
+    SVM_TRAIN_DATA: '../models/SVM_train.txt'  # Path to SVM training data.
+  RESOLVER:
+    MIN_LINEAGE: 10    # Minimum lineage length to be recorded in the `phase` table output.
+    G2_TRH: 100        # For arrested G1/G2 tracks, over-threshold tracks will be classified as G2.
+
+### EXPERIMENT ONLY. DO NOT CHANGE.
+SPLIT:
+  GRID: 0
+  EDGE_WIDTH: 20
+  DILATE_ROUND: 3

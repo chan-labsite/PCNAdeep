@@ -1,0 +1,31 @@
+BATCH: false
+PIX_SATURATE: 0.8
+GAMMA: 1
+SPLIT:
+  GRID: 0
+  EDGE_WIDTH: 20
+  DILATE_ROUND: 3
+EDGE_FLT: 50
+SIZE_FLT: 800
+TRACKER:
+  DISPLACE: 70
+  GAP_FILL: 5
+POST_PROCESS:
+  MIN_G: 6
+  MIN_S: 5
+  MIN_M: 3
+  REFINER:
+    MODE: SVM
+    SMOOTH: 5
+    MASK_CONSTRAINT: false
+    # TRH mode only
+    MAX_DIST_TRH: 100
+    MAX_FRAME_TRH: 5
+    # SVM mode only
+    SEARCH_RANGE: 5
+    MITOSIS_LEN: 5
+    SAMPLE_FREQ: 0.05
+    SVM_TRAIN_DATA: '../models/SVM_train.txt'
+  RESOLVER:
+    MIN_TRACK: 10
+    G2_TRH: 100

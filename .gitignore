@@ -1,0 +1,22 @@
+output
+models
+examples/**
+!examples/readme.md
+inspect
+test
+bin/pcnaDeep/test_*.py
+__pycache__
+.DS_Store
+.ipynb_checkpoints
+.Rhistory
+
+# sphinx
+_build
+
+# idea
+.idea
+
+# pypi
+build
+*.egg-info
+dist

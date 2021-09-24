@@ -458,14 +458,24 @@ def expand_bbox(bbox, factor, limit):
     return tuple(new_bbox)
 
 
-def align_table_and_mask(table, mask):
+def align_table_and_mask(table, mask, align_morph=False, align_int=False, image=None):
     """For every object in the mask, check if is consistent with the table. If no, remove the object in the mask.
 
     Args:
         table (pandas.DataFrame): (tracked) object table.
         mask (numpy.ndarray): labeled object mask, object label should be corresponding to `continuous_label` column in the table.
     """
+    BBOX_FACTOR = 2  # dilate the bounding box when calculating the background intensity.
+    if align_int and (image is None or len(image.shape)<4):
+        raise ValueError('Must supply intensity image with dimension txyc if align_int is True.')
+    if (not align_morph) and align_int:
+        raise ValueError('Must set align_morph=True if align_int is True.')
+    
     count = 0
+    count_up = 0
+    h, w = mask.shape[1], mask.shape[2]
+    if align_morph:
+        new = pd.DataFrame()
     for i in range(mask.shape[0]):
         sub = table[table['frame'] == i]
         sls = mask[i,:,:].copy()
@@ -479,9 +489,48 @@ def align_table_and_mask(table, mask):
                 sls[sls == j] = 0
                 count += 1
             mask[i,:,:] = sls
-
+        if align_morph:
+            props = measure.regionprops(mask[i,:,:], intensity_image=image)
+            for p in props:
+                lb = p.label
+                obj = sub[sub['continuous_label'] == lb]
+                if obj.shape[0]<1:
+                    raise ValueError('Object in the mask not registered in the table!')
+                y,x = p.centroid
+                if float(obj['Center_of_the_object_0']) == x and float(obj['Center_of_the_object_1']) == y:
+                    # The object is unchanged if coordinate matches
+                    continue
+                else:
+                    count_up += 1
+                    # Update morphology
+                    sub.loc[obj.index, 'Center_of_the_object_0'] = x
+                    sub.loc[obj.index, 'Center_of_the_object_1'] = y
+                    min_axis, maj_axis = p.minor_axis_length, p.major_axis_length
+                    sub.loc[obj.index, 'minor_axis'] = min_axis
+                    sub.loc[obj.index, 'major_axis'] = maj_axis
+                    if align_int:
+                        # Update inensity
+                        b1, b3, b2, b4 = expand_bbox(p.bbox, BBOX_FACTOR, (h,w))
+                        obj_region = mask[i, b1:b2, b3:b4].copy()
+                        its_region = image[i, b1:b2, b3:b4, 0].copy()
+                        dic_region = image[i, b1:b2, b3:b4, 2].copy()
+                        if 0 not in obj_region:
+                            sub.loc[obj.index, 'background_mean'] = 0
+                        else:
+                            sub.loc[obj.index, 'background_mean'] = np.mean(its_region[obj_region == 0])
+                        cal = obj_region == lb
+                        sub.loc[obj.index, 'mean_intensity'] = np.mean(its_region[cal])
+                        sub.loc[obj.index, 'BF_mean'] = np.mean(dic_region[cal])
+                        sub.loc[obj.index, 'BF_std'] = np.std(dic_region[cal])
+            new = new.append(sub.copy())
+    
     print('Removed ' + str(count) + ' objects.')
-    return mask
+
+    if align_morph:
+        print('Updated ' + str(cuont_up) + ' objects.')
+        return mask, new
+    else:
+        return mask
 
 
 def merge_obj_tables(a, b, col, mode='label'):

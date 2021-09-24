@@ -477,7 +477,7 @@ def align_table_and_mask(table, mask, align_morph=False, align_int=False, image=
     if align_morph:
         new = pd.DataFrame()
     for i in range(mask.shape[0]):
-        sub = table[table['frame'] == i]
+        sub = table[table['frame'] == i].copy()
         sls = mask[i,:,:].copy()
         lbs = sorted(list(np.unique(sls)))
         if lbs[0] == 0:
@@ -490,17 +490,18 @@ def align_table_and_mask(table, mask, align_morph=False, align_int=False, image=
                 count += 1
             mask[i,:,:] = sls
         if align_morph:
-            props = measure.regionprops(mask[i,:,:], intensity_image=image)
+            props = measure.regionprops(mask[i,:,:])
             for p in props:
                 lb = p.label
                 obj = sub[sub['continuous_label'] == lb]
                 if obj.shape[0]<1:
                     raise ValueError('Object in the mask not registered in the table!')
                 y,x = p.centroid
-                if float(obj['Center_of_the_object_0']) == x and float(obj['Center_of_the_object_1']) == y:
+                if np.round(obj['Center_of_the_object_0'].iloc[0],3) == np.round(x,3) and np.round(obj['Center_of_the_object_1'].iloc[0],3) == np.round(y,3):
                     # The object is unchanged if coordinate matches
                     continue
                 else:
+                    print('Update object ' + str(lb) + ' at frame ' + str(i))
                     count_up += 1
                     # Update morphology
                     sub.loc[obj.index, 'Center_of_the_object_0'] = x
@@ -527,7 +528,7 @@ def align_table_and_mask(table, mask, align_morph=False, align_int=False, image=
     print('Removed ' + str(count) + ' objects.')
 
     if align_morph:
-        print('Updated ' + str(cuont_up) + ' objects.')
+        print('Updated ' + str(count_up) + ' objects.')
         return mask, new
     else:
         return mask

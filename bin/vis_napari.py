@@ -5,7 +5,7 @@ import argparse
 import re
 import pprint
 import numpy as np
-from pcnaDeep.data.utils import find_daugs, align_table_and_mask
+from pcnaDeep.data.utils import find_daugs, align_table_and_mask, expand_bbox
 import skimage.measure as measure
 
 
@@ -281,16 +281,18 @@ class Trk_viewer(napari.Viewer):
         """Save current table.
         """
         mask = self.layers[1].data
+        track = self.track.copy()
         if mask_flag:
-            mask = align_table_and_mask(self.track, mask)
+            mask, track = align_table_and_mask(track, mask, align_morph=True, align_int=True, image=self.layers[0].data)
             if int(np.max(mask)) <= 255:
                 io.imsave(self.mask_path, mask.astype('uint8'))
             else:
                 io.imsave(self.mask_path, mask)
         self.mask = mask.copy()
         self.getAnn()
-        self.track.to_csv(self.track_path, index=None)
-        self.saved = self.track.copy()
+        track.to_csv(self.track_path, index=None)
+        self.saved = track.copy()
+        self.track = track.copy()
         print('Saved.')
         return
 
@@ -391,7 +393,10 @@ class Trk_viewer(napari.Viewer):
             trk_id (int): Track ID.
             cls (str): Cell cycle classification.
         """
+        BBOX_FACTOR = 2  # dilate the bounding box when calculating the background intensity.
         mask = self.layers[1].data
+        image = self.layers[0].data
+        h, w = mask.shape[1], mask.shape[2]
         msk_slice = mask[frame, :, :]
         trk_slice = self.track[self.track['frame'] == frame]
         if obj_id in list(trk_slice['continuous_label']):
@@ -448,7 +453,7 @@ class Trk_viewer(napari.Viewer):
             nm = '-'.join([str(trk_id), cls])
         new_row['name'] = nm
 
-        # Register measurements of the object, will not measure intensity.
+        # Register measurements of the object morphology.
         misc = np.zeros(msk_slice.shape, dtype='uint8')
         misc[msk_slice == obj_id] = 1
         p = measure.regionprops(label_image=misc)[0]
@@ -458,7 +463,20 @@ class Trk_viewer(napari.Viewer):
         new_row['Center_of_the_object_1'] = y
         new_row['minor_axis'] = min_axis
         new_row['major_axis'] = maj_axis
-
+        # Register object inensity
+        b1, b3, b2, b4 = expand_bbox(p.bbox, BBOX_FACTOR, (h,w))
+        obj_region = misc[b1:b2, b3:b4].copy()
+        its_region = image[frame, b1:b2, b3:b4, 0].copy()
+        dic_region = image[frame, b1:b2, b3:b4, 2].copy()
+        if 0 not in obj_region:
+            new_row['background_mean'] = 0
+        else:
+            new_row['background_mean'] = np.mean(its_region[obj_region == 0])
+        cal = obj_region == 1
+        new_row['mean_intensity'] = np.mean(its_region[cal])
+        new_row['BF_mean'] = np.mean(dic_region[cal])
+        new_row['BF_std'] = np.std(dic_region[cal])
+        print(new_row)
         # For extra fields
         for i in set(list(self.track.columns)) - set(list(new_row.keys())):
             new_row[i] = np.nan

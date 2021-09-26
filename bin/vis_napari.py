@@ -476,13 +476,16 @@ class Trk_viewer(napari.Viewer):
         new_row['mean_intensity'] = np.mean(its_region[cal])
         new_row['BF_mean'] = np.mean(dic_region[cal])
         new_row['BF_std'] = np.std(dic_region[cal])
-        print(new_row)
         # For extra fields
         for i in set(list(self.track.columns)) - set(list(new_row.keys())):
             new_row[i] = np.nan
 
         self.track = self.track.append(new_row, ignore_index=True)
         self.track = self.track.sort_values(by=['trackId', 'frame'])
+
+    def get_mx(self, frame):
+        mask = self.layers[1].data
+        return int(np.max(mask[frame,:,:]))
 
     def doCorrect(self):
         """Iteration for user command input.
@@ -496,8 +499,14 @@ class Trk_viewer(napari.Viewer):
             args = self.parser.parse_args(ipt_list[1:])
             if args.f:
                 args.f = int(args.f) - self.frame_base
+                if args.f > int(np.max(self.track['frame'])):
+                    print('Frame value larger than the image!')
+                    continue
             if args.e:
                 args.e = int(args.e) - self.frame_base
+                if args.e > int(np.max(self.track['frame'])):
+                    print('Frame value larger than the image!')
+                    continue
 
             try:
                 if cmd == 'cls':
@@ -555,6 +564,9 @@ class Trk_viewer(napari.Viewer):
                     break
                 elif cmd == 'revert':
                     self.revert()
+                elif cmd == 'mx':
+                    vl = self.get_mx(int(args.f))
+                    print('Maximum object label at frame ' + str(args.f) + ': ' + str(vl))
                 else:
                     print("Wrong command argument!")
                     print("=================== Available Commands ===================\n")
@@ -572,6 +584,7 @@ class Trk_viewer(napari.Viewer):
                          'div -p -ds -f         ': 'Set division time of one mitosis event involving '
                                                    'parent (p) and daughters (ds, comma separated) '
                                                    'at frame (f)',
+                         'mx -f                 ': 'Check the maximum object label of frame (f).',
                          'b -o -f -t -l         ': 'Register new object on the mask, with the object ID (o), at frame (f), '
                                                    'its track ID (t) and cell cycle classification (l).',
                          'q                     ': 'Quit the interface',

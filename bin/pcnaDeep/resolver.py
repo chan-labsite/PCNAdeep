@@ -264,18 +264,18 @@ class Resolver:
         """
         ann = []
         cls_col = 'resolved_class'
-        if cls_col not in self.track.columns:
+        if cls_col not in self.rsTrack.columns:
             print('Phase not resolved yet. Using predicted phase classifications.')
             cls_col = 'predicted_class'
-        track_id = list(self.track['trackId'])
-        parent_id = list(self.track['parentTrackId'])
-        cls_lb = list(self.track[cls_col])
-        for i in range(self.track.shape[0]):
+        track_id = list(self.rsTrack['trackId'])
+        parent_id = list(self.rsTrack['parentTrackId'])
+        cls_lb = list(self.rsTrack[cls_col])
+        for i in range(self.rsTrack.shape[0]):
             inform = [str(track_id[i]), str(parent_id[i]), cls_lb[i]]
             if inform[1] == '0':
                 del inform[1]
             ann.append('-'.join(inform))
-        self.track['name'] = ann
+        self.rsTrack['name'] = ann
         return
 
     def resolveArrest(self, G2_trh=None):

@@ -161,8 +161,8 @@ class DatasetMapper:
         pcna = img_as_ubyte(pcna)
         dic = img_as_ubyte(dic)
         #pcna_raw = img_as_ubyte(pcna_raw)
-        slice_list = [pcna, pcna, pcna]
-        #slice_list = [pcna, pcna, dic]
+        #slice_list = [pcna, pcna, pcna]
+        slice_list = [pcna, pcna, dic]
         image = np.stack(slice_list, axis=2)
 
         return image

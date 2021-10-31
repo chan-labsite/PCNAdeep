@@ -458,7 +458,7 @@ def expand_bbox(bbox, factor, limit):
     return tuple(new_bbox)
 
 
-def align_table_and_mask(table, mask, align_morph=False, align_int=False, image=None):
+def align_table_and_mask(table, mask, align_morph=False, align_int=False, image=None, pcna=None, bf=None):
     """For every object in the mask, check if is consistent with the table. If no, remove the object in the mask.
 
     Args:
@@ -466,11 +466,15 @@ def align_table_and_mask(table, mask, align_morph=False, align_int=False, image=
         mask (numpy.ndarray): labeled object mask, object label should be corresponding to `continuous_label` column in the table.
     """
     BBOX_FACTOR = 2  # dilate the bounding box when calculating the background intensity.
-    if align_int and (image is None or len(image.shape)<4):
-        raise ValueError('Must supply intensity image with dimension txyc if align_int is True.')
-    if (not align_morph) and align_int:
-        raise ValueError('Must set align_morph=True if align_int is True.')
+    if not (pcna is not None and bf is not None):
+        if align_int and (image is None or len(image.shape)<4):
+            raise ValueError('Must supply intensity image with dimension txyc if align_int is True.')
+        if (not align_morph) and align_int:
+            raise ValueError('Must set align_morph=True if align_int is True.')
     
+    if image:
+        pcna = image[:,:,:,0]
+        bf = image[:,:,:,-1]
     count = 0
     count_up = 0
     h, w = mask.shape[1], mask.shape[2]
@@ -513,8 +517,8 @@ def align_table_and_mask(table, mask, align_morph=False, align_int=False, image=
                         # Update inensity
                         b1, b3, b2, b4 = expand_bbox(p.bbox, BBOX_FACTOR, (h,w))
                         obj_region = mask[i, b1:b2, b3:b4].copy()
-                        its_region = image[i, b1:b2, b3:b4, 0].copy()
-                        dic_region = image[i, b1:b2, b3:b4, 2].copy()
+                        its_region = pcna[i, b1:b2, b3:b4].copy()
+                        dic_region = bf[i, b1:b2, b3:b4].copy()
                         if 0 not in obj_region:
                             sub.loc[obj.index, 'background_mean'] = 0
                         else:

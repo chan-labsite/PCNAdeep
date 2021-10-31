@@ -331,7 +331,7 @@ def predictFrame(img, frame_id, demonstrator, is_gray=False, size_flt=1000, edge
         dic_region = img[b1:b2, b3:b4, 2].copy()
         background.append(np.mean(its_region[obj_region == 0]))
         dic_mean.append(np.mean(dic_region[obj_region == lb_image]))
-        dic_std.append(np.mean(dic_region[obj_region == lb_image]))
+        dic_std.append(np.std(dic_region[obj_region == lb_image]))
         
         # get confidence score and emerging status
         p = factor[cls[lb_ori - 1].item()]

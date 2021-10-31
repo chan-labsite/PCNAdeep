@@ -33,7 +33,7 @@ def track(df, displace=40, gap_fill=5):
     f = df[['Center_of_the_object_0', 'Center_of_the_object_1', 'BF_mean', 'BF_std', 'frame']]
     f.columns = ['x', 'y', 'BF_mean', 'BF_std', 'frame']
     if TRACK_WITH_DIC:
-        pc = f.columns[:-1]
+        pc = f.columns[:-2]
     else:
         pc = ['x','y']
     t = tp.link(f, search_range=displace, memory=gap_fill, adaptive_stop=0.4 * displace, pos_columns=pc)

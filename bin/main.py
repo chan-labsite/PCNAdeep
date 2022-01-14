@@ -183,21 +183,17 @@ def main(stack, config, output, prefix, logger):
     logger.info('Refining and Resolving...')
     post_cfg = config['POST_PROCESS']
     refiner_cfg = post_cfg['REFINER']
-    if not bool(refiner_cfg['MASK_CONSTRAINT']['ENABLED']):
-        logger.info('Mask constraint disabled')
-        mask_out = None
-        df = None
-    else:
-        logger.info('Mask constraint enabled.')
-        df = float(refiner_cfg['MASK_CONSTRAINT']['DILATE_FACTOR'])
-    myRefiner = Refiner(track_out, threshold_mt_F=int(refiner_cfg['MAX_DIST_TRH']),
+    df = float(refiner_cfg['MASK_CONSTRAINT']['DILATE_FACTOR'])
+    dr = float(refiner_cfg['MASK_CONSTRAINT']['FRAME_RANGE'])
+    myRefiner = Refiner(track_out, mask=mask_out, threshold_mt_F=int(refiner_cfg['MAX_DIST_TRH']),
                         threshold_mt_T=int(refiner_cfg['MAX_FRAME_TRH']), smooth=int(refiner_cfg['SMOOTH']),
                         maxBG=float(post_cfg['MAX_BG']),
                         minM=float(post_cfg['MIN_M']), search_range=int(refiner_cfg['SEARCH_RANGE']),
                         sample_freq=float(refiner_cfg['SAMPLE_FREQ']),
                         model_train=refiner_cfg['SVM_TRAIN_DATA'], svm_c=int(refiner_cfg['C']),
-                        mode=refiner_cfg['MODE'], mask=mask_out, dilate_factor=df, 
-                        aso_trh=float(refiner_cfg['ASO_TRH']), dist_weight=float(refiner_cfg['DIST_WEIGHT']))
+                        mode=refiner_cfg['MODE'], dilate_factor=df,
+                        aso_trh=float(refiner_cfg['ASO_TRH']), dist_weight=float(refiner_cfg['DIST_WEIGHT']),
+                        frame_weight=float(refiner_cfg['FRAME_WEIGHT']))
     ann, track_rfd, mt_dic, imprecise = myRefiner.doTrackRefine()
     del mask_out
     gc.collect()

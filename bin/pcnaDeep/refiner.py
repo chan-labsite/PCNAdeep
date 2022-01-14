@@ -22,12 +22,38 @@ def dist(x1, y1, x2, y2):
     return math.sqrt((float(x1) - float(x2)) ** 2 + (float(y1) - float(y2)) ** 2)
 
 
+def get_stack_mask(labels, frame, mask, dilate_size=80):
+    """Generate stacked mask for a specific object
+
+    Args:
+        labels (list): object labels on each frame.
+        frame (list): frame index of the mask.
+        mask (numpy.ndarray): objects mask.
+        dilate_size (int): range of the dilation mask.
+
+    Returns:
+        Stacked mask (numpy.ndarray).
+    """
+
+    sls = []
+    for i in range(len(labels)):
+        sl = mask[frame[i], :, :].copy()
+        sl[sl != labels[i]] = 0
+        sl = sl.astype('bool')
+        sls.append(sl)
+    out = np.sum(np.stack(sls, axis=0), axis=0)
+    out = out.astype('bool')
+    out = morph.binary_dilation(out, selem=np.ones((dilate_size, dilate_size)))
+    return out
+
+
 class Refiner:
 
-    def __init__(self, track, smooth=5, maxBG=5, minM=10, mode='SVM',
+    def __init__(self, track, mask, smooth=5, maxBG=5, minM=10, mode='SVM',
                  threshold_mt_F=100, threshold_mt_T=25,
-                 search_range=10, sample_freq=1/5, model_train='', mask=None,
-                 dilate_factor=0.5, aso_trh=0.5, dist_weight=0.8, svm_c=0.5, dt_id=None, test_id=None):
+                 search_range=10, sample_freq=1 / 5, model_train='',
+                 dilate_factor=0.5, mask_frame_range=5, aso_trh=0.5, dist_weight=0.8, frame_weight=0.2,
+                 svm_c=0.5, dt_id=None, test_id=None):
         """Refinement of the tracked objects.
 
         Algorithms:
@@ -37,6 +63,7 @@ class Refiner:
 
         Args:
             track (pandas.DataFrame): tracked object table.
+            mask (numpy.ndarray): object masks, same shape as input, must labeled with object ID.
             smooth (int): smoothing window on classification confidence.
             maxBG (float): Maximum appearance of other phases when searching mitosis.
             minM (float): Minimum appearance of mitosis.
@@ -45,13 +72,14 @@ class Refiner:
             threshold_mt_F (int): mitosis displace maximum, can be evaluated as maximum cytokinesis distance.
             threshold_mt_T (int): mitosis frame difference maximum, can be evaluated as maximum mitosis frame length.
             - Essential for SVM/TRAIN mode (for normalizing different imaging conditions):
-            search_range (int): when calculating mitosis score, how many time points to consider. 
+            search_range (int): when calculating mitosis score, how many time points to consider.
                 Any track length shorter than search_range will not be considered during mitosis association.
             sample_freq (float): sampling frequency: x frame per minute.
             model_train (str): path to SVM model training data.
-            mask (numpy.ndarray): object masks, same shape as input, must labeled with object ID.
             dilate_factor (float): dilate the mask with `n * mean object radius`, default 0.5.
-            dist_weight (float): 0~1, distance weight in calculating cost in TRH mode *only*
+            mask_frame_range (float): the number of frames to stack when extracting a track segment.
+            dist_weight (float): 0~1, distance weight in calculating cost in TRH mode *only*.
+            frame_weight (float): 0~1, frame weight in calculating cost in TRH mode *only*.
             svm_c (int): SVM C parameter, higher stricter.
         """
 
@@ -91,13 +119,19 @@ class Refiner:
         self.daug_from_broken = []
         self.mt_dic = {}
         self.par_mt_mask = {}
+        self.app_mask = {}
         self.mt_exit_lookup = {}  # {parent ID: (exit frame, quality)}
         self.mt_entry_lookup = {}  # {daughter ID: (exit frame, quality)}
         self.imprecise = []  # imprecise mitosis: daughter exit without M classification
         self.mean_size = np.mean(np.array(self.track[['major_axis', 'minor_axis']]))
+        # dilate the mask by 50% mean radius, adjustable
+        self.dilate_size = int(2 * self.dilate_factor * int(np.floor(self.mean_size / 4)))
+        self.mask_frame_range = mask_frame_range
         self.mean_intensity = np.mean(np.array(self.track[['mean_intensity']]))
         self.logger.info('Mean size: ' + str(self.mean_size))
         self.dist_weight = dist_weight
+        self.frame_weight = frame_weight
+        assert dist_weight + frame_weight <= 1
         self.ann = pd.DataFrame(
             columns=['track', 'app_frame', 'disapp_frame', 'app_x', 'app_y', 'disapp_x', 'disapp_y', 'app_stage',
                      'disapp_stage', 'predicted_parent'])
@@ -122,7 +156,7 @@ class Refiner:
                 confid = np.array(sub[['Probability of G1/G2', 'Probability of S', 'Probability of M']])
                 if sub['parentTrackId'].iloc[0] in self.mt_dic.keys():
                     prev_exit = self.mt_dic[int(sub['parentTrackId'].iloc[0])]['daug'][trk]['m_exit']
-                    esp = list(sub['frame']).index(prev_exit)+1
+                    esp = list(sub['frame']).index(prev_exit) + 1
                 else:
                     esp = 0
                 out = deduce_transition(l=cls, tar='M', confidence=confid, min_tar=self.MIN_M, max_res=self.MAX_BG,
@@ -132,21 +166,21 @@ class Refiner:
                     found = True
                     cur_m_entry, m_exit = out
                     cla = list(sub['predicted_class'])
-                    for k in range(cur_m_entry, m_exit+1):
+                    for k in range(cur_m_entry, m_exit + 1):
                         cla[k] = 'M'
-                    
+
                     sub.loc[:, 'predicted_class'] = cla
                     # split mitosis track, keep parent track with 2 'M' prediction
                     # this makes cytokinesis unpredictable...
                     m_entry = list(sub['frame'])[cur_m_entry]
-                    x_list = list(sub['Center_of_the_object_0'].iloc[cur_m_entry:m_exit+1])
-                    y_list = list(sub['Center_of_the_object_1'].iloc[cur_m_entry:m_exit+1])
+                    x_list = list(sub['Center_of_the_object_0'].iloc[cur_m_entry:m_exit + 1])
+                    y_list = list(sub['Center_of_the_object_1'].iloc[cur_m_entry:m_exit + 1])
                     frame_list = list(sub['frame'])
                     distance = \
-                        list(map(lambda x:dist(x_list[x], y_list[x],
-                                               x_list[x+1], y_list[x+1]) / (frame_list[x+1]-frame_list[x]),
-                                 range(len(x_list)-1)))
-                    sp_time = cur_m_entry + np.argmax(distance)+1
+                        list(map(lambda x: dist(x_list[x], y_list[x],
+                                                x_list[x + 1], y_list[x + 1]) / (frame_list[x + 1] - frame_list[x]),
+                                 range(len(x_list) - 1)))
+                    sp_time = cur_m_entry + np.argmax(distance) + 1
                     new_track = sub[sub['frame'] >= frame_list[sp_time]].copy()
                     new_track.loc[:, 'trackId'] = cur_max
                     new_track.loc[:, 'lineageId'] = list(sub['lineageId'])[0]  # inherit the lineage
@@ -157,8 +191,8 @@ class Refiner:
                     x2 = sub.iloc[sp_time - 1]['Center_of_the_object_0']
                     y2 = sub.iloc[sp_time - 1]['Center_of_the_object_1']
                     self.mt_dic[trk] = {'div': m_entry,
-                                        'daug': {cur_max: {'m_exit': frame_list[m_exit], 
-                                            'dist': np.round(dist(x1, y1, x2, y2), 2)}}}
+                                        'daug': {cur_max: {'m_exit': frame_list[m_exit],
+                                                           'dist': np.round(dist(x1, y1, x2, y2), 2)}}}
                     cur_max += 1
                     count += 1
                     old_track = sub[sub['frame'] < frame_list[sp_time]].copy()
@@ -171,7 +205,7 @@ class Refiner:
         return filtered_track, count
 
     def register_track(self):
-        """Register track annotation table 
+        """Register track annotation table
         """
         frame_tolerance = self.SEARCH_RANGE
 
@@ -233,8 +267,6 @@ class Refiner:
             ann.loc[idx, 'm_exit'] = self.mt_dic[i]['daug'][daug_trk]['m_exit']
 
         track['lineageId'] = track['trackId'].copy()  # erase original lineage ID, assign in following steps
-        self.logger.info("High quality tracks subjected to predict relationship: " + str(ann.shape[0] - len(short_tracks)))
-
         return track, short_tracks, ann
 
     def render_emerging(self, track, cov_range):
@@ -245,13 +277,13 @@ class Refiner:
             bg_emg = list(track['emerging'].iloc[0:cov_range])
             end_cls = list(track['predicted_class'].iloc[(track.shape[0] - cov_range): track.shape[0]])
             end_emg = list(track['emerging'].iloc[(track.shape[0] - cov_range): track.shape[0]])
-            
+
         else:
             bg_cls = list(track['predicted_class'].iloc[0:min(cov_range, track.shape[0])])
             bg_emg = list(track['emerging'].iloc[0:min(cov_range, track.shape[0])])
             end_cls = list(track['predicted_class'].iloc[max(0, track.shape[0] - cov_range):])
             end_emg = list(track['emerging'].iloc[max(0, track.shape[0] - cov_range):])
-        
+
         for i in range(len(bg_emg)):
             if bg_emg[i] == 1:
                 bg_cls[i] = 'M'
@@ -329,8 +361,8 @@ class Refiner:
             par_exit = self.ann[self.ann['track'] == trackId]['m_exit'].values[0]
             if par_exit is not None:
                 skp = list(trk['frame']).index(par_exit)
-                c1 = c1[skp+1:]
-                c1_confid = c1_confid[skp+1:, :]
+                c1 = c1[skp + 1:]
+                c1_confid = c1_confid[skp + 1:, :]
             trans = deduce_transition(c1[::-1], tar='M', confidence=c1_confid[::-1, :],
                                       min_tar=1, max_res=self.MAX_BG, escape=skip)
             if trans is not None:
@@ -369,8 +401,8 @@ class Refiner:
 
         for i in pool:
             if i not in daughter_pool and i not in lin_daug_pool and i not in self.short_tracks:
-                if re.search('M', self.ann[self.ann['track'] == i]['app_stage'].values[0]) is not None:
-                # if re.search('S', self.ann[self.ann['track'] == i]['app_stage'].values[0]) is None:
+                # if re.search('M', self.ann[self.ann['track'] == i]['app_stage'].values[0]) is not None:
+                if re.search('S', self.ann[self.ann['track'] == i]['app_stage'].values[0]) is None:
                     daughter_pool.append(i)
 
         if extra_par:
@@ -380,50 +412,50 @@ class Refiner:
 
         return parent_pool, daughter_pool
 
-    def get_parent_mask(self, p):
-        """Extract parent mask, begin from mitosis entry, end with parent disappearance
+    def get_app_mask(self, trackID, mode='app'):
+        """Extract mask at the beginning (appearance) of the track
 
         Args:
-            p (int): parent track ID
+            trackID (int): track ID.
+            mode (str): either 'app' or 'par' mode. If 'par', will use parent track info. Else track info only.
+            frame_range (int): For 'app' mode. Frames to stack together for an overall mask. Default 5 frames post app.
         """
-        if p not in self.par_mt_mask.keys():
-            sub = self.track[(self.track['trackId'] == p) & (self.track['frame'] >= (self.mt_entry_lookup[p][0] - 2))]
-            lbs = list(sub['continuous_label'])
+        if mode == 'app':
+            kys = self.app_mask.keys()
+        else:
+            kys = self.par_mt_mask.keys()
+        if trackID not in kys:
+            if mode == 'app':
+                sub = self.track[(self.track['trackId'] == trackID)]
+                sub = sub[sub['frame'] < (sub['frame'].iloc[0] + self.mask_frame_range)]
+            else:
+                sub = self.track[(self.track['trackId'] == trackID) &
+                                 (self.track['frame'] >= (self.mt_entry_lookup[trackID][0] - 2))]
             frame = list(sub['frame'])
-            sls = []
-            for i in range(len(lbs)):
-                sl = self.mask[frame[i], :, :].copy()
-                sl[sl != lbs[i]] = 0
-                sl = sl.astype('bool')
-                sls.append(sl)
-            out = np.sum(np.stack(sls, axis=0), axis=0)
-            out = out.astype('bool')
-            # dilate the mask by 50% mean radius, adjustable
-            dilate_range = int(2 * self.dilate_factor * int(np.floor(self.mean_size/4)))
-            out = morph.binary_dilation(out, selem=np.ones((dilate_range, dilate_range)))
+            out = get_stack_mask(labels=list(sub['continuous_label']), frame=frame,
+                                 mask=self.mask, dilate_size=self.dilate_size)
             if np.sum(out) == 0:
-                warnings.warn('Object not found in mask for parent: ' + str(p) + ' in frames: ' + str(frame)[1:-1])
-            self.par_mt_mask[p] = out
+                warnings.warn('Object not found in mask for track: ' + str(trackID) + ' in frames: ' + str(frame)[1:-1])
+
+            if mode == 'app':
+                self.app_mask[trackID] = out
+            else:
+                self.par_mt_mask[trackID] = out
             return out
         else:
-            return self.par_mt_mask[p]
+            return self.app_mask[trackID] if mode == 'app' else self.par_mt_mask[trackID]
 
-    def daug_app_in_par_mask(self, par, daug):
-        """Check if daughter appears in the mask of parent
+    def calc_IOU_par_daug(self, par, daug):
+        """
 
         Args:
-            par (int): parent track ID
-            daug (int): daughter track ID
+            par (int): parent track ID.
+            daug (int): daughter track ID.
         """
-        mask = self.get_parent_mask(par)
-        sub = self.ann[self.ann['track'] == daug]
-        x = int(np.floor(sub['app_x']))
-        y = int(np.floor(sub['app_y']))
-
-        if mask[y, x]:
-            return True
-        else:
-            return False
+        a = self.get_app_mask(par, mode='par')
+        b = self.get_app_mask(daug, frame_range=5, mode='app')
+        return np.sum(np.logical_and(a, b)) / np.sum(b)
+        #return np.sum(np.logical_and(a, b)) / np.sum(np.logical_or(a, b))
 
     def extract_features(self, par_pool, daug_pool, remove_outlier=None, normalize=None, sample=None):
         """Extract Input Features for the classifier
@@ -443,31 +475,28 @@ class Refiner:
         ipts = []
         sample_id = []
         y = []
-        for i in tqdm.tqdm(par_pool):
+        for i in tqdm.tqdm(range(len(par_pool))):
             for j in range(len(daug_pool)):
-                if i != daug_pool[j]:
-                    ind = self.getAsoInput(i, daug_pool[j])
+                if par_pool[i] != daug_pool[j]:
+                    ind = self.getAsoInput(par_pool[i], daug_pool[j])
 
                     rgd = False  # first register input from broken pairs
-                    if i in self.mt_dic.keys():
-                        if daug_pool[j] in self.mt_dic[i]['daug'].keys():
+                    if par_pool[i] in self.mt_dic.keys():
+                        if daug_pool[j] in self.mt_dic[par_pool[i]]['daug'].keys():
                             ipts.append(ind)
-                            sample_id.append([i, daug_pool[j]])
+                            sample_id.append([par_pool[i], daug_pool[j]])
                             rgd = True
 
-                    par_end = self.ann[self.ann['track'] == i]['disapp_frame'].values[0]
+                    par_end = self.ann[self.ann['track'] == par_pool[i]]['disapp_frame'].values[0]
                     daug_appear = self.ann[self.ann['track'] == daug_pool[j]]['app_frame'].values[0]
                     if not rgd and (ind[1] <= 0 or par_end >= daug_appear):
                         continue
                     elif not rgd:
-                        if self.mask is not None:
-                            if not self.daug_app_in_par_mask(i, daug_pool[j]):
-                                continue
                         ipts.append(ind)
-                        sample_id.append([i, daug_pool[j]])
+                        sample_id.append([par_pool[i], daug_pool[j]])
 
                     if sample is not None:
-                        a = np.where(sample[:, 0] == i)[0].tolist()
+                        a = np.where(sample[:, 0] == par_pool[i])[0].tolist()
                         b = np.where(sample[:, 1] == daug_pool[j])[0].tolist()
                         sp_index = list(set(a) & set(b))
                         if sp_index:
@@ -501,24 +530,26 @@ class Refiner:
     def plainPredict(self, ipts):
         """Generate cost of each potential daughter-parent pair (sample).
         """
-        WEIGHT_DIST = (1 - self.ASO_TRH) * self.dist_weight
-        WEIGHT_TIME = 1 - self.ASO_TRH - WEIGHT_DIST
+        WEIGHT_DIST = self.dist_weight
+        WEIGHT_TIME = self.frame_weight
+        WEIGHT_OVERLAP = 1 - WEIGHT_DIST - WEIGHT_TIME
 
-        out = np.zeros((ipts.shape[0],2))
+        out = np.zeros((ipts.shape[0], 2))
         s = MinMaxScaler()
         ipts_norm = s.fit_transform(ipts)
 
         frame_tol = self.FRAME_MT_TOLERANCE / self.metaData['sample_freq']
-        dist_tol = self.DIST_MT_TOLERANCE / (self.mean_size/2 +
+        dist_tol = self.DIST_MT_TOLERANCE / (self.mean_size / 2 +
                                              1 * self.metaData['meanDisplace'])
 
         for i in range(ipts.shape[0]):
-            if ipts[i,1] <= 0 or ipts[i,0] > dist_tol or ipts[i,1] > frame_tol:
+            if ipts[i, 1] <= 0 or ipts[i, 0] > dist_tol or ipts[i, 1] > frame_tol:
                 score = 0
             else:
-                score = np.round(1 - WEIGHT_DIST * ipts_norm[i,0] - WEIGHT_TIME * ipts_norm[i,1], 3)
-            out[i,0] = 1-score
-            out[i,1] = score
+                score = np.round(1 - WEIGHT_DIST * ipts_norm[i, 0] - WEIGHT_TIME * ipts_norm[i, 1] - \
+                                 WEIGHT_OVERLAP * (1-ipts_norm[i, 2]), 3)
+            out[i, 0] = 1 - score
+            out[i, 1] = score
         return out
 
     def extract_train_from_break(self, sample_id, ipts, mt_dic):
@@ -549,11 +580,11 @@ class Refiner:
         mt_dic = deepcopy(self.mt_dic)
 
         parent_pool, pool = self.extract_pools()
-        
+
         self.logger.debug('Short tracks excluded: ' + str(self.short_tracks)[1:-1])
         self.logger.debug('Candidate parents: ' + str(parent_pool)[1:-1])
         self.logger.debug('Candidate daughters: ' + str(pool)[1:-1])
-        
+
         ipts, sample_id = self.extract_features(parent_pool, pool, remove_outlier=None, normalize=False)
 
         if ipts.shape[0] == 0:
@@ -564,7 +595,7 @@ class Refiner:
             # Read in baseline training data
             baseline = np.array(pd.read_csv(self.SVM_PATH, header=None))
             baseline_x = baseline[:, :ipts.shape[1]]
-            baseline_y = baseline[:, baseline.shape[1]-1]
+            baseline_y = baseline[:, baseline.shape[1] - 1]
 
             self.logger.info('Augment SVM train: ' + str(self.DO_AUG))
             if len(mt_dic.keys()) > 0 and self.DO_AUG:
@@ -649,7 +680,7 @@ class Refiner:
                         self.imprecise.append(daugs[i])
                         ips_count += 1
                     ann, mt_dic = self.register_mitosis(deepcopy(ann), deepcopy(mt_dic),
-                                                        par, daugs[i], m_exit, np.round(1+csts[i],3), m_entry)
+                                                        par, daugs[i], m_exit, np.round(1 + csts[i], 3), m_entry)
             else:
                 ori_daugs = list(mt_dic[par]['daug'].keys())
                 for ori_daug in ori_daugs:
@@ -662,9 +693,9 @@ class Refiner:
                             self.imprecise.append(daugs[i])
                             ips_count += 1
                         ann, mt_dic = self.register_mitosis(deepcopy(ann), deepcopy(mt_dic),
-                                                            par, daugs[i], m_exit, np.round(1+csts[i],3), m_entry)
+                                                            par, daugs[i], m_exit, np.round(1 + csts[i], 3), m_entry)
                     else:
-                        mt_dic[par]['daug'][daugs[i]]['dist'] = np.round(1+csts[i],3)
+                        mt_dic[par]['daug'][daugs[i]]['dist'] = np.round(1 + csts[i], 3)
 
         # count 2 daughters-found relationships
         count = 0
@@ -699,7 +730,7 @@ class Refiner:
             return self.track.copy()
         if self.SMOOTH < 0:
             raise ValueError('Smoothing window must be positive odd number, not ' + str(self.SMOOTH))
-        elif self.SMOOTH%2 != 1:
+        elif self.SMOOTH % 2 != 1:
             self.logger.warning('Even smoothing window found, use the biggest odd smaller than ' + str(self.SMOOTH))
             self.SMOOTH -= 1
         count = 0
@@ -752,7 +783,7 @@ class Refiner:
         return pd.DataFrame(d)
 
     def getAsoInput(self, parent, daughter):
-        """Generate SVM classifier input for track 1 & 2.
+        """Generate classifier input for candidate parent and daughter track.
 
         Args:
             parent (int): parent track ID.
@@ -760,7 +791,7 @@ class Refiner:
 
         Returns:
             Input vector of the classifier:
-            - [distance_diff, frame_diff]
+            - [distance_diff, frame_diff, iou]
 
             Some parameters are normalized with dataset specific features:
             - distance_diff /= ave_displace
@@ -797,8 +828,11 @@ class Refiner:
         y2 = daug['Center_of_the_object_1'].iloc[0]
         distance_diff = dist(x1, y1, x2, y2)
 
-        out = [distance_diff / (self.mean_size/2 + np.abs(frame_diff) * self.metaData['meanDisplace']),
-               frame_diff / self.metaData['sample_freq']]
+        # TEST Feature 3: overlap
+        iou = self.calc_IOU_par_daug(parent, daughter)
+
+        out = [distance_diff / (self.mean_size / 2 + np.abs(frame_diff) * self.metaData['meanDisplace']),
+               frame_diff / self.metaData['sample_freq'], iou]
 
         return out
 
@@ -831,7 +865,7 @@ class Refiner:
                     else:
                         dic[par] = [i]
             self.logger.info(str(ct) + ' samples drawn from tracked object table.')
-            sp = {'par':[], 'daug':[]}
+            sp = {'par': [], 'daug': []}
             for i in dic.keys():
                 for j in dic[i]:
                     sp['daug'].append(j)
@@ -840,7 +874,7 @@ class Refiner:
         else:
             self.logger.info('Generating SVM samples from mitosis lookup table.')
 
-        parent_pool, pool = self.extract_pools(extra_par=list(sample[:,0]), extra_daug=list(sample[:,1]))
+        parent_pool, pool = self.extract_pools(extra_par=list(sample[:, 0]), extra_daug=list(sample[:, 1]))
         ipts, y, sample_id = self.extract_features(parent_pool, pool, sample=sample)
 
         return ipts, y, sample_id

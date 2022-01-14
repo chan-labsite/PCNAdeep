@@ -16,14 +16,15 @@ POST_PROCESS:
     SEARCH_RANGE: 10   # Range of searching M/E classification for defining candidate mother/daughter tracks.
 
     MASK_CONSTRAINT:
-      ENABLED: false
-      DILATE_FACTOR: 0.5
+      FRAME_RANGE: 5      # The number of frames to stack mask together when extracting a track segment.
+      DILATE_FACTOR: 0.5  # Dilate extracted mask.
 
     MODE: TRH          # Mitosis association mode, either TRH (threshold-based) or SVM (require training data).
     # TRH mode only
     MAX_DIST_TRH: 120  # Maximum distance allowed for valid mother/daughter pair.
     MAX_FRAME_TRH: 10  # Maximum frame gap between mother disappearance and daughter appearance.
-    DIST_WEIGHT: 0.5   # Weight of distance penalty, the weight for frame with be `1-DIST_WEIGHT`. 
+    DIST_WEIGHT: 0.5   # Weight of distance penalty
+    FRAME_WEIGHT: 0.5  # Weight of frame penalty, the overlapping penalty weight will be `1-DIST_WEIGHT-FRAME_WEIGHT`.
     # SVM mode only
     ASO_TRH: 0.5       # Threshold filter on SVM confidence score.
     C: 13              # C parameter for linear kernel SVM.

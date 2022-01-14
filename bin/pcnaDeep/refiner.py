@@ -43,7 +43,8 @@ def get_stack_mask(labels, frame, mask, dilate_size=80):
         sls.append(sl)
     out = np.sum(np.stack(sls, axis=0), axis=0)
     out = out.astype('bool')
-    out = morph.binary_dilation(out, selem=np.ones((dilate_size, dilate_size)))
+    if dilate_size > 0:
+        out = morph.binary_dilation(out, selem=morph.disk(radius = dilate_size, dtype=bool))
     return out
 
 
@@ -52,7 +53,7 @@ class Refiner:
     def __init__(self, track, mask, smooth=5, maxBG=5, minM=10, mode='SVM',
                  threshold_mt_F=100, threshold_mt_T=25,
                  search_range=10, sample_freq=1 / 5, model_train='',
-                 dilate_factor=0.5, mask_frame_range=5, aso_trh=0.5, dist_weight=0.8, frame_weight=0.2,
+                 dilate_factor=1, mask_frame_range=5, aso_trh=0.5, dist_weight=0.8, frame_weight=0.2,
                  svm_c=0.5, dt_id=None, test_id=None):
         """Refinement of the tracked objects.
 
@@ -125,7 +126,7 @@ class Refiner:
         self.imprecise = []  # imprecise mitosis: daughter exit without M classification
         self.mean_size = np.mean(np.array(self.track[['major_axis', 'minor_axis']]))
         # dilate the mask by 50% mean radius, adjustable
-        self.dilate_size = int(2 * self.dilate_factor * int(np.floor(self.mean_size / 4)))
+        self.dilate_size = int(self.dilate_factor * int(np.floor(self.mean_size / 2)))
         self.mask_frame_range = mask_frame_range
         self.mean_intensity = np.mean(np.array(self.track[['mean_intensity']]))
         self.logger.info('Mean size: ' + str(self.mean_size))
@@ -428,12 +429,14 @@ class Refiner:
             if mode == 'app':
                 sub = self.track[(self.track['trackId'] == trackID)]
                 sub = sub[sub['frame'] < (sub['frame'].iloc[0] + self.mask_frame_range)]
+                ds = 0  # do not dilate daughter mask
             else:
+                ds = self.dilate_size  # dilate parent mask
                 sub = self.track[(self.track['trackId'] == trackID) &
                                  (self.track['frame'] >= (self.mt_entry_lookup[trackID][0] - 2))]
             frame = list(sub['frame'])
             out = get_stack_mask(labels=list(sub['continuous_label']), frame=frame,
-                                 mask=self.mask, dilate_size=self.dilate_size)
+                                 mask=self.mask, dilate_size=ds)
             if np.sum(out) == 0:
                 warnings.warn('Object not found in mask for track: ' + str(trackID) + ' in frames: ' + str(frame)[1:-1])
 
@@ -453,7 +456,7 @@ class Refiner:
             daug (int): daughter track ID.
         """
         a = self.get_app_mask(par, mode='par')
-        b = self.get_app_mask(daug, frame_range=5, mode='app')
+        b = self.get_app_mask(daug, mode='app')
         return np.sum(np.logical_and(a, b)) / np.sum(b)
         #return np.sum(np.logical_and(a, b)) / np.sum(np.logical_or(a, b))
 

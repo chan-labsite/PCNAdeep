@@ -191,7 +191,7 @@ def main(stack, config, output, prefix, logger):
                         minM=float(post_cfg['MIN_M']), search_range=int(refiner_cfg['SEARCH_RANGE']),
                         sample_freq=float(refiner_cfg['SAMPLE_FREQ']),
                         model_train=refiner_cfg['SVM_TRAIN_DATA'], svm_c=int(refiner_cfg['C']),
-                        mode=refiner_cfg['MODE'], dilate_factor=df,
+                        mode=refiner_cfg['MODE'], dilate_factor=df, mask_frame_range=dr,
                         aso_trh=float(refiner_cfg['ASO_TRH']), dist_weight=float(refiner_cfg['DIST_WEIGHT']),
                         frame_weight=float(refiner_cfg['FRAME_WEIGHT']))
     ann, track_rfd, mt_dic, imprecise = myRefiner.doTrackRefine()

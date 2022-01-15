@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Modified by Yifan Gui from FAIR Detectron2, Apache 2.0 licence.
+# Modified by Yifan Gui from FAIR Detectron2 v0.4, Apache 2.0 licence.
 import argparse
 import json
 import multiprocessing as mp
@@ -130,20 +130,26 @@ if __name__ == "__main__":
         for i in range(imgs.shape[0]):
             img = imgs[i,:]
             start_time = time.time()
+            detected = False
             if not args.vis_out:
                 # Generate json output readable by VIA2
                 img_relabel, out_props = predictFrame(imgs[i, :], i, demo, size_flt=1000, edge_flt=0)
                 file_name = args.prefix + '-' + "%04d" % i + '.png'
                 dic_frame = pred2json(img_relabel, out_props, file_name)
                 json_out[file_name] = dic_frame
+                if 'regions' in dic_frame.keys():
+                    detected = len(dic_frame['regions'])
             else:
                 # Generate visualized output
                 predictions, visualized_output = demo.run_on_image(img)
+                detected = len(predictions["instances"])
+                if detected == 0:
+                    detected = False
                 imgs_out.append(visualized_output.get_image())
             logger.info(
                 "{}: {} in {:.2f}s".format(
                     'frame'+str(i),
-                    "detected {} instances".format(len(dic_frame['regions'])),
+                    "detected {} instances".format(detected) if detected else 'no instances detected.',
                     time.time() - start_time,
                 )
             )

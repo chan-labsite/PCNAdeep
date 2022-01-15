@@ -549,8 +549,7 @@ class Refiner:
             if ipts[i, 1] <= 0 or ipts[i, 0] > dist_tol or ipts[i, 1] > frame_tol:
                 score = 0
             else:
-                score = np.round(1 - WEIGHT_DIST * ipts_norm[i, 0] - WEIGHT_TIME * ipts_norm[i, 1] - \
-                                 WEIGHT_OVERLAP * (1-ipts_norm[i, 2]), 3)
+                score = 1 - WEIGHT_DIST * ipts_norm[i, 0] - WEIGHT_TIME * ipts_norm[i, 1] - WEIGHT_OVERLAP * (1-ipts_norm[i, 2])
             out[i, 0] = 1 - score
             out[i, 1] = score
         return out

@@ -343,7 +343,10 @@ def predictFrame(img, frame_id, demonstrator, is_gray=False, size_flt=1000, edge
         confid = conf[lb_ori - 1]
         phase.append(p)
         s_confid.append(confid[1])
-        g_confid.append(confid[0] + confid[3])
+        if len(confid) > 3:
+            g_confid.append(confid[0] + confid[3])
+        else:
+            g_confid.append(confid[0])
         m_confid.append(confid[2])
 
     out_props['phase'] = phase

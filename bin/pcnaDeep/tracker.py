@@ -214,7 +214,7 @@ def track_GT_json(fp_json, height=1200, width=1200, displace=40, gap_fill=5, siz
     elif fp_pcna is not None and fp_bf is not None:
         PCNA_intensity = io.imread(fp_pcna)
         BF_intensity = io.imread(fp_bf)
-    elif fp_pcna is None or fp_bf is None:
+    elif (fp_pcna is None and fp_bf is not None) or (fp_bf is None and fp_pcna is not None):
         raise ValueError('PCNA channel image stack must be supplied with bright field together.')
     else:
         PCNA_intensity = None

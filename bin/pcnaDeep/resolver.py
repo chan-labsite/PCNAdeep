@@ -133,16 +133,13 @@ def resolve_from_gt(track, gt_name='predicted_class', extra_gt=None, G2_trh=None
 
     Note:
         - If do not want G2 to be classified based on thresholding, rather, based on ground truth classification.
-        Simply leave `G2_trh=None` and the threshold will be calculated as the smallest average intensity of G2 phase
-        in labeled tracks (outlier smaller than mena - 3*sd excluded).
-
+            Simply leave `G2_trh=None` and the threshold will be calculated as the smallest average intensity of G2 phase
+            in labeled tracks (outlier smaller than mena - 3*sd excluded).
         - If the ground truth column does not contain `G2` instances, tell the program to look at
-        an extra partially G2 ground truth column like `resolved_class` to extract information. This may be useful when
-        `predicted_class` has been corrected from the Correction Interface which only contains G1/G2 but not G2. In this
-        case, you can also assign `resolved_class` as the ground truth classification column. Both will work.
-
-        - If `mean_intensity` or `background_mean` column is not in the table, will set the threshold to 100.
-
+            an extra partially G2 ground truth column like `resolved_class` to extract information. This may be useful when
+            `predicted_class` has been corrected from the Correction Interface which only contains G1/G2 but not G2. In this
+            case, you can also assign `resolved_class` as the ground truth classification column. Both will work.  
+        - If `mean_intensity` or `background_mean` column is not in the table, will set the threshold to 100.  
         - Use at own risk if the input classification in not reliable.
     """
     if G2_trh is None:

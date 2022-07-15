@@ -1,0 +1,24 @@
+# pcnaDeep
+torch>=1.7
+scikit-image>=0.17
+matplotlib
+numpy
+pandas
+iopath
+trackpy>=0.4.2
+opencv-python
+scikit-learn>=0.24.1
+scipy
+tqdm
+
+# pytorch
+https://download.pytorch.org/whl/cpu/torch-1.8.0%2Bcpu-cp37-cp37m-linux_x86_64.whl
+https://download.pytorch.org/whl/cpu/torchvision-0.9.0%2Bcpu-cp37-cp37m-linux_x86_64.whl
+https://download.pytorch.org/whl/torchaudio-0.8.0-cp37-cp37m-linux_x86_64.whl
+
+# sphinx
+sphinx_rtd_theme
+sphinx
+docutils
+recommonmark
+rst2pdf

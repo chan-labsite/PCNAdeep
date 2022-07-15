@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.abspath('../bin/'))
 # -- Project information -----------------------------------------------------
 
 project = 'pcnaDeep'
-copyright = '2021, Chan Kuan Yoow Group'
+copyright = '2022, Chan Kuan Yoow Group'
 author = 'Chan Kuan Yoow Group'
 
 # The full version, including alpha/beta/rc tags
@@ -52,7 +52,7 @@ autodoc_inherit_docstrings = False
 autodoc_member_order = "bysource"
 
 intersphinx_mapping = {
-    "python": ("https://docs.python.org/3.6", None),
+    "python": ("https://docs.python.org/3.7", None),
     "numpy": ("https://docs.scipy.org/doc/numpy/", None),
     "pandas": ("https://pandas.pydata.org/docs/", None),
 }

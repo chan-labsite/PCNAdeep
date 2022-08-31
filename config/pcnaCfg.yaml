@@ -4,7 +4,7 @@ GAMMA: 1               # Gamma factor to pre-process the image.
 EDGE_FLT: 10           # Ignore objects at the edge (pixel unit).
 SIZE_FLT: 800          # Filter out detection with size below this (pixel count).
 TRACKER:
-  DISPLACE: 80         # Maximum movement of particles between consecutive frames in (x, y, bright field intensity) space.
+  DISPLACE: 80         # Maximum movement of particles between consecutive frames in (x, y, bright field intensity, bright field intensity) space.
   GAP_FILL: 10         # Maximum gap to fill.
 POST_PROCESS:
   MAX_BG: 5            # Maximum background classification accumulative scores to reject a period.

@@ -81,9 +81,7 @@ API documentation is available [here](https://pcnadeep.readthedocs.io/en/latest/
 
 Please cite our paper if you found this package useful. 
 ```
-pcnaDeep: A Fast and Robust Single-Cell Tracking Method Using Deep-Learning Mediated Cell Cycle Profiling
-Yifan Gui, Shuangshuang Xie, Yanan Wang, Ping Wang, Renzhi Yao, Xukai Gao, Yutian Dong, Gaoang Wang, Kuan Yoow Chan
-bioRxiv 2021.09.19.460933; doi: https://doi.org/10.1101/2021.09.19.460933
+Gui Y, Xie S, Wang Y, Wang P, Yao R, Gao X, Dong Y, Wang G, Chan KY. pcnaDeep: a fast and robust single-cell tracking method using deep-learning mediated cell cycle profiling. Bioinformatics. 2022 Oct 14;38(20):4846-4847. doi: 10.1093/bioinformatics/btac602. PMID: 36047834.
 ```
 
 ## Licence

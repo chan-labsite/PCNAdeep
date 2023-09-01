@@ -83,7 +83,7 @@ Please cite our paper if you found this package useful.
 ```
 pcnaDeep: A Fast and Robust Single-Cell Tracking Method Using Deep-Learning Mediated Cell Cycle Profiling
 Yifan Gui, Shuangshuang Xie, Yanan Wang, Ping Wang, Renzhi Yao, Xukai Gao, Yutian Dong, Gaoang Wang, Kuan Yoow Chan
-bioRxiv 2021.09.19.460933; doi: https://doi.org/10.1101/2021.09.19.460933
+Bioinformatics, Volume 38, Issue 20, 15 October 2022, Pages 4846–4847; doi: https://doi.org/10.1093/bioinformatics/btac602
 ```
 
 ## Licence
